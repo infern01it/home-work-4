@@ -6,6 +6,11 @@ var app = express();
 
 var time = new Date();
 
+function $_GET(url, key) {
+  url = url.match(new RegExp(key + '=([^&=]+)'));
+  return url ? url[1] : false;
+}
+
 app.get("/", function(request, response) {
     response.send("<h2>Привет Express!</h2>");
 });
@@ -25,26 +30,50 @@ app.get("/status", function(request, response) {
 });
 
 app.get("/api/events", function(request, response) {
-  var events = fs.readFileSync("events.json", "utf8");
+  var content = fs.readFileSync("events.json", "utf8"); // Получаю json
+  var events = JSON.parse(content);
 
-  if(request.url === "/api/events") {
+  if(request.url === "/api/events" || request.url === "/api/events/") { // Проверяю url (если он без гет параметра)
     response.send(events);
   } else {
-    var filter = request.url.split("?")[1].split(":");
+    var getParams = $_GET(request.url, 'type'); // Переданные параметры
+    if( !getParams ) { // Если параметров не передано
+      response.status(400).send('incorrect type');
+    } else { // Если параметры переданы
+      var defaultEventsType = ['info', 'critical']; // Допустимые типы событий
+      var filters = getParams.split(":"); // Делю параметры на массив
 
-    var string = "";
-    filter.map(el => {
-      string += el+" ";
-    });
+      var notError = true;
+      if( filters.length > 0 ) {
+        filters.forEach(el => {
+          if((' ' + defaultEventsType.join(' ') + ' ').indexOf(' ' + el.toLowerCase() + ' ') === -1) notError = false;
+        });
+      }
 
-    // var newEvents = [];
-    // events["events"].forEach(el => {
-    //   if(  )
-    //   return el.type === 
-    // })
-
-    response.send(events);
+      if( !notError ) { // Если какой-то из параметров не совпал с допустимыми
+        response.status(400).send('incorrect type');
+      } else { // Если все входящие параметры совпадают с допустимыми
+        var newEvents = events["events"].filter(el => { // Фильтрую события по переданным гет параметрам
+          var result = false;
+          filters.forEach( f => {
+            if( el.type === f ) {
+              result = true;
+            }
+          });
+          return result;
+        });
+        newEvents = {
+          events: newEvents
+        };
+        response.send(newEvents);
+      }
+  
+    }
   }
+});
+
+app.get("*", function(request, response) {
+  response.status(404).send("<h1>Page not found</h1>");
 });
 
 app.listen(8000);
