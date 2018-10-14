@@ -65,12 +65,14 @@ app.post("/api/events", function(request, response) {
   if( getPage ) {
     var start = getPage * getPageLimit - getPageLimit;
     var end = getPage * getPageLimit;
-    if( end - 1 > sendEvents["events"].length ) { // Логично при запросе на несуществующую страницу возвращать статус 404
+    var sendEventsLength = sendEvents["events"].length;
+    if( start > sendEventsLength ) { // Логично при запросе на несуществующую страницу возвращать статус 404
       return response.status(404).send("<h1>Page not found</h1>");
     }
     var newEvents = [];
     for( var i = start ; i < end ; i++ ) {
-      newEvents.push(sendEvents["events"][i])
+      if( i >= sendEventsLength ) break;
+      newEvents.push(sendEvents["events"][i]);
     }
     sendEvents = {
       events: newEvents
