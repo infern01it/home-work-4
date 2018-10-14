@@ -1,10 +1,10 @@
 var express = require("express");
-var bodyParser = require("body-parser");
 var fs = require("fs");
 
 var app = express();
 var time = new Date();
-var urlencodedParser = bodyParser.json({extended: false});
+
+app.use(express.json());
 
 app.post("/status", function(request, response) {
   var thisTime = new Date();
@@ -20,7 +20,7 @@ app.post("/status", function(request, response) {
   response.send(twoNumber(hours) + ":" + twoNumber(minutes) + ":" + twoNumber(seconds));
 });
 
-app.post("/api/events", urlencodedParser, function(request, response) {
+app.post("/api/events", function(request, response) {
   if(!request.body) return response.sendStatus(400);
   var content = fs.readFileSync("new-events.json", "utf8"); // Получаю json
   var events = JSON.parse(content);
