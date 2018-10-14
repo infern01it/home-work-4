@@ -1,21 +1,12 @@
-var path = require("path");
 var express = require("express");
+var bodyParser = require("body-parser");
 var fs = require("fs");
 
 var app = express();
-
 var time = new Date();
+var urlencodedParser = bodyParser.json({extended: false});
 
-function $_GET(url, key) {
-  url = url.match(new RegExp(key + '=([^&=]+)'));
-  return url ? url[1] : false;
-}
-
-app.get("/", function(request, response) {
-    response.send("<h2>Привет Express!</h2>");
-});
-
-app.get("/status", function(request, response) {
+app.post("/status", function(request, response) {
   var thisTime = new Date();
   var newTime = thisTime - time;
   var hours = parseInt(newTime / 1000 / 60 / 60);
@@ -29,50 +20,67 @@ app.get("/status", function(request, response) {
   response.send(twoNumber(hours) + ":" + twoNumber(minutes) + ":" + twoNumber(seconds));
 });
 
-app.get("/api/events", function(request, response) {
-  var content = fs.readFileSync("events.json", "utf8"); // Получаю json
+app.post("/api/events", urlencodedParser, function(request, response) {
+  if(!request.body) return response.sendStatus(400);
+  var content = fs.readFileSync("new-events.json", "utf8"); // Получаю json
   var events = JSON.parse(content);
 
-  if(request.url === "/api/events" || request.url === "/api/events/") { // Проверяю url (если он без гет параметра)
-    response.send(events);
-  } else {
-    var getParams = $_GET(request.url, 'type'); // Переданные параметры
-    if( !getParams ) { // Если параметров не передано
-      response.status(400).send('incorrect type');
-    } else { // Если параметры переданы
-      var defaultEventsType = ['info', 'critical']; // Допустимые типы событий
-      var filters = getParams.split(":"); // Делю параметры на массив
+  var getType = request.body.type // Тип
+  var getPage = request.body.page // Страница
+  var getPageLimit = request.body.pageLimit || 10; // Кол-во событий на странице
 
-      var notError = true;
-      if( filters.length > 0 ) {
-        filters.forEach(el => {
-          if((' ' + defaultEventsType.join(' ') + ' ').indexOf(' ' + el.toLowerCase() + ' ') === -1) notError = false;
-        });
-      }
+  var sendEvents = {
+    events: events["events"]
+  };
 
-      if( !notError ) { // Если какой-то из параметров не совпал с допустимыми
-        response.status(400).send('incorrect type');
-      } else { // Если все входящие параметры совпадают с допустимыми
-        var newEvents = events["events"].filter(el => { // Фильтрую события по переданным гет параметрам
-          var result = false;
-          filters.forEach( f => {
-            if( el.type === f ) {
-              result = true;
-            }
-          });
-          return result;
+  if( getType ) { // Если в запросе указаны типы событий
+    var defaultEventsType = ['info', 'critical']; // Допустимые типы событий
+    var filters = getType.split(":"); // Делю параметры на массив
+
+    /* Проверка соответствия передынных типов событий с допустимыми */
+    var notError = true;
+    if( filters.length > 0 ) {
+      filters.forEach(el => {
+        if((' ' + defaultEventsType.join(' ') + ' ').indexOf(' ' + el.toLowerCase() + ' ') === -1) notError = false;
+      });
+    }
+
+    if( !notError ) { // Если какой-то из параметров не совпал с допустимыми
+      return response.status(400).send('incorrect type');
+    } else { // Если все входящие параметры совпадают с допустимыми
+      var newEvents = sendEvents["events"].filter(el => { // Фильтрую события по переданным гет параметрам
+        var result = false;
+        filters.forEach( f => {
+          if( el.type === f ) {
+            result = true;
+          }
         });
-        newEvents = {
-          events: newEvents
-        };
-        response.send(newEvents);
-      }
-  
+        return result;
+      });
+      sendEvents = {
+        events: newEvents
+      };
     }
   }
+  if( getPage ) {
+    var start = getPage * getPageLimit - getPageLimit;
+    var end = getPage * getPageLimit;
+    if( end - 1 > sendEvents["events"].length ) { // Логично при запросе на несуществующую страницу возвращать статус 404
+      return response.status(404).send("<h1>Page not found</h1>");
+    }
+    var newEvents = [];
+    for( var i = start ; i < end ; i++ ) {
+      newEvents.push(sendEvents["events"][i])
+    }
+    sendEvents = {
+      events: newEvents
+    };
+  }
+
+  response.send(sendEvents);
 });
 
-app.get("*", function(request, response) {
+app.post("*", function(request, response) {
   response.status(404).send("<h1>Page not found</h1>");
 });
 
